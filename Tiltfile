@@ -177,3 +177,59 @@ cmd_button('verify-user1',
    icon_name='update',
    text='Verify User 1',
 )
+
+
+# ------------ vclusters ------------
+kubeconfig_file='zarf/kubeconfig.yaml'
+vcluster_create_cmd="""vcluster create porter-{} \\
+    --update-current=false \\
+    --connect=false 1>&2;
+
+vcluster connect porter-{} \\
+    --update-current=false \\
+    --kube-config={} 1>&2;
+
+kubectl get sts porter-{} -o yaml
+"""
+vcluster_delete_cmd="""vcluster delete porter-{} \\
+    --update-current=false
+"""
+vcluster_connect_cmd="""vcluster connect {} \\
+    --update-current=false \\
+    --kube-config={}
+"""
+
+environments=['dev', 'staging']
+for env in environments:
+    k8s_custom_deploy(
+        '{}-cluster'.format(env) ,
+        apply_cmd=vcluster_create_cmd.format(env, env, kubeconfig_file, env),
+        delete_cmd=vcluster_delete_cmd.format(env),
+        deps=[],
+        # apply_dir = '/',
+
+        # apply_env = {
+        #     "REPO_URL": glProjectUrl,
+        # } ,
+        # delete_dir = 'zarf/',
+        # delete_env = {
+        #     "KUBECONFIG": kubeconfig_file
+        # },
+    )
+
+# build CLI binary so we can connect our vclusters
+local_resource(
+  name='cli-binary',
+  cmd='''go build -ldflags="-X 'github.com/porter-dev/porter/cli/cmd/config.Version=dev'" -tags cli -o ./bin/porter-cli ./cli''',
+  
+  deps=[
+    "api",
+    "build",
+    "cli",
+    "ee",
+    "internal",
+    "pkg",
+  ],
+  labels=["porter"]
+)
+
