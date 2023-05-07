@@ -1,4 +1,6 @@
+load('ext://helm_remote', 'helm_remote')
 load('ext://restart_process', 'docker_build_with_restart')
+load('ext://uibutton', 'cmd_button')
 
 secret_settings(disable_scrub=True)
 
@@ -6,14 +8,26 @@ if not os.path.exists("vendor"):
     local(command="go mod vendor")
 
 if config.tilt_subcommand == "up":
-    local(command="cd dashboard; npm i --legacy-peer-deps")
+    local_resource(
+        name="npm install", 
+        cmd="npm i --legacy-peer-deps",
+        deps=[
+            "dashboard",
+        ],
+        ignore=[
+            "dashboard/node_modules/**",
+            "dashboard/package-lock.json",
+        ],
+        dir="dashboard/",
+        labels=["dashboard"],
+    )
 
 if config.tilt_subcommand == "down":
     local(command="rm -rf vendor")
     local(command="rm -rf dashboard/node_modules")
 
 build_args = "GOOS=linux GOARCH=arm64"
-if os.getenv("PLATFORM") == "amd64":
+if str(local("uname -m")).strip("\n") == "x86_64":
     build_args = "GOOS=linux GOARCH=amd64"
 
 allow_k8s_contexts('kind-porter')
@@ -58,7 +72,7 @@ local_resource(
     "internal",
     "pkg",
   ],
-  resource_deps=["postgresql"],
+  resource_deps=["porter-db-postgresql"],
   labels=["z_binaries"]
 )
 
@@ -96,15 +110,79 @@ local_resource(
 )
 
 # Frontend
+frontend_port="8081"
 local_resource(
     name="porter-dashboard",
     serve_cmd="npm start",
     serve_dir="dashboard",
     serve_env={
-        "ENV_FILE": "../zarf/helm/.dashboard.env"
+        "ENV_FILE": "../zarf/helm/.dashboard.env",
+        "DEV_SERVER_PORT": frontend_port,
     },
-    resource_deps=["postgresql"],
-    labels=["porter"]
+    resource_deps=["porter-db-postgresql"],
+    labels=["porter", "dashboard"],
+    links=["http://127.0.0.1:"+frontend_port]
 )
 # local_resource('public-url', serve_cmd='lt --subdomain "$(whoami)" --port 8080', resource_deps=["porter-dashboard"], labels=["porter"])
 # local_resource('public-url', serve_cmd='ngrok http 8081 --log=stdout', resource_deps=["porter-dashboard"], labels=["porter"])
+
+# Migrations
+local_resource(
+    name="run-migrations",
+    cmd='''kubectl exec -it deploy/porter-server-web -- /app/migrate''',
+    resource_deps=["migrations-binary", "porter-binary"],
+    labels=["porter"],
+    trigger_mode=TRIGGER_MODE_MANUAL,
+)
+
+# ------------ postgresql ------------
+db_user     = 'porter'
+db_password = 'porter'
+helm_remote(
+  'postgresql',
+  repo_url='https://charts.bitnami.com/bitnami',
+  version='12.2.7',
+  release_name='porter-db',
+  namespace='porter',
+  set=[
+    # "auth.enablePostgresUser=true",
+    # "auth.postgresPassword=porter", 
+    # "auth.database="+dbName,
+    "auth.username="+db_user,
+    "auth.password="+db_password
+  ]
+)
+
+k8s_resource(
+    "porter-db-postgresql",
+    port_forwards=["5432:5432"],
+    labels=["porter", "postgresql"],
+)
+psql_cmd_base=['psql', '-h', '127.0.0.1', '-U', db_user, 'porter', '-c']
+cmd_button('list-tables',
+   argv=psql_cmd_base + ['\\dt'],
+   env=[
+    "PGPASSWORD=" + db_password,
+   ],
+   resource='porter-db-postgresql',
+   icon_name='information',
+   text='list tables',
+)
+cmd_button('show-users',
+   argv=psql_cmd_base + ['SELECT * FROM users;'],
+   env=[
+    "PGPASSWORD=" + db_password,
+   ],
+   resource='porter-db-postgresql',
+   icon_name='information',
+   text='list users',
+)
+cmd_button('verify-user1',
+   argv=psql_cmd_base + ['UPDATE users SET email_verified=\'t\' WHERE id=1;'],
+   env=[
+    "PGPASSWORD=" + db_password,
+   ],
+   resource='porter-db-postgresql',
+   icon_name='update',
+   text='Verify User 1',
+)

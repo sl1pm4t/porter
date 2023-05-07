@@ -3,13 +3,14 @@ kind: Kustomization
 
 helmCharts:
 - name: web
-  repo: https://charts.getporter.dev
   releaseName: porter-server
+  repo: https://charts.getporter.dev
   valuesFile: server.yaml
 
 configMapGenerator:
-- name: porter-server-env
-  env: .server.env
+- envs:
+  - .server.env
+  name: porter-server-env
 generatorOptions:
   disableNameSuffixHash: true
 
