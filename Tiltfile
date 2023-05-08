@@ -180,16 +180,17 @@ cmd_button('verify-user1',
 
 
 # ------------ vclusters ------------
-kubeconfig_file='zarf/kubeconfig.yaml'
-vcluster_create_cmd="""vcluster create porter-{} \\
+kubeconfig_file='zarf/$ENV-kubeconfig.yaml'
+vcluster_create_cmd="""ENV={}
+vcluster create porter-$ENV \\
     --update-current=false \\
     --connect=false 1>&2;
 
-vcluster connect porter-{} \\
+vcluster connect porter-$ENV \\
     --update-current=false \\
     --kube-config={} 1>&2;
 
-kubectl get sts porter-{} -o yaml
+kubectl get sts porter-$ENV -n vcluster-porter-$ENV -o yaml
 """
 vcluster_delete_cmd="""vcluster delete porter-{} \\
     --update-current=false
@@ -203,7 +204,7 @@ environments=['dev', 'staging']
 for env in environments:
     k8s_custom_deploy(
         '{}-cluster'.format(env) ,
-        apply_cmd=vcluster_create_cmd.format(env, env, kubeconfig_file, env),
+        apply_cmd=vcluster_create_cmd.format(env, kubeconfig_file),
         delete_cmd=vcluster_delete_cmd.format(env),
         deps=[],
         # apply_dir = '/',
