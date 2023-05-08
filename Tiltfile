@@ -79,7 +79,7 @@ local_resource(
 local_resource(
     name="migrations-binary",
     cmd='''GOWORK=off CGO_ENABLED=0 %s go build -mod vendor -gcflags '-N -l' -tags ee -o ./bin/migrate ./cmd/migrate/main.go ./cmd/migrate/migrate_ee.go''' % build_args,
-    resource_deps=["postgresql"],
+    resource_deps=["porter-db-postgresql"],
     labels=["z_binaries"],
 )
 
@@ -125,15 +125,6 @@ local_resource(
 )
 # local_resource('public-url', serve_cmd='lt --subdomain "$(whoami)" --port 8080', resource_deps=["porter-dashboard"], labels=["porter"])
 # local_resource('public-url', serve_cmd='ngrok http 8081 --log=stdout', resource_deps=["porter-dashboard"], labels=["porter"])
-
-# Migrations
-local_resource(
-    name="run-migrations",
-    cmd='''kubectl exec -it deploy/porter-server-web -- /app/migrate''',
-    resource_deps=["migrations-binary", "porter-binary"],
-    labels=["porter"],
-    trigger_mode=TRIGGER_MODE_MANUAL,
-)
 
 # ------------ postgresql ------------
 db_user     = 'porter'
