@@ -117,7 +117,9 @@ const RepoList: React.FC<Props> = ({
     try {
       const res = await api.getGitlabRepos<string[]>(
         "<token>",
-        {},
+        {
+          "searchTerm": searchFilter
+        },
         { project_id: currentProject.id, integration_id: integrationId }
       );
       const repos: RepoType[] = res.data.map((repo) => ({
@@ -160,7 +162,7 @@ const RepoList: React.FC<Props> = ({
       .finally(() => {
         setRepoLoading(false);
       });
-  }, [currentProvider]);
+  }, [currentProvider, searchFilter]);
 
   // clear out actionConfig and SelectedRepository if new search is performed
   useEffect(() => {
